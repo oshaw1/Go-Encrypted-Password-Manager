@@ -31,7 +31,7 @@ func StorePassword(title, link, password, masterPassword string, pathToPasswordF
 		return fmt.Errorf("failed to read password manager: %w", err)
 	}
 
-	encryptionKey := encryption.DeriveEncryptionKey(masterPassword, manager.Salt)
+	encryptionKey := encryption.DeriveEncryptionKeyFromMasterPassword(masterPassword, manager.Salt)
 
 	encryptedPassword, err := encryption.EncryptWithAES(password, encryptionKey)
 	if err != nil {
@@ -65,7 +65,7 @@ func RetrievePassword(id, masterPassword string, pathToPasswordFile string) (str
 		return "", fmt.Errorf("invalid master password")
 	}
 
-	encryptionKey := encryption.DeriveEncryptionKey(masterPassword, manager.Salt)
+	encryptionKey := encryption.DeriveEncryptionKeyFromMasterPassword(masterPassword, manager.Salt)
 
 	for _, password := range manager.Passwords {
 		if password.ID == id {
@@ -80,13 +80,13 @@ func RetrievePassword(id, masterPassword string, pathToPasswordFile string) (str
 	return "", fmt.Errorf("password not found")
 }
 
-func DeletePassword(id, masterPassword string, pathToPasswordFile string) error {
+func DeletePasswordByID(id, masterPassword string, pathToPasswordFile string) error {
 	manager, err := ReadPasswordManager(pathToPasswordFile)
 	if err != nil {
 		return fmt.Errorf("failed to read password manager: %w", err)
 	}
 
-	encryptionKey := encryption.DeriveEncryptionKey(masterPassword, manager.Salt)
+	encryptionKey := encryption.DeriveEncryptionKeyFromMasterPassword(masterPassword, manager.Salt)
 
 	foundIndex := -1
 	for i, password := range manager.Passwords {

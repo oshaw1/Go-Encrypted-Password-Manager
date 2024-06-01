@@ -10,10 +10,10 @@ import (
 )
 
 func TestEncryptDecryptWithAES(t *testing.T) {
-	masterPassword := "your-master-password"
+	masterPassword := "test-master-password"
 	salt, err := encryption.GenerateSalt()
 	require.NoError(t, err)
-	correctKey := encryption.DeriveEncryptionKey(masterPassword, salt)
+	correctKey := encryption.DeriveEncryptionKeyFromMasterPassword(masterPassword, salt)
 
 	testCases := []struct {
 		name      string
@@ -61,12 +61,12 @@ func TestEncryptDecryptWithAES(t *testing.T) {
 }
 
 func TestDecryptWithAES(t *testing.T) {
-	masterPassword := "your-master-password"
+	masterPassword := "test-master-password"
 	incorrectPassword := "incorrect-password"
 	salt, err := encryption.GenerateSalt()
 	require.NoError(t, err)
-	correctKey := encryption.DeriveEncryptionKey(masterPassword, salt)
-	incorrectKey := encryption.DeriveEncryptionKey(incorrectPassword, salt)
+	correctKey := encryption.DeriveEncryptionKeyFromMasterPassword(masterPassword, salt)
+	incorrectKey := encryption.DeriveEncryptionKeyFromMasterPassword(incorrectPassword, salt)
 
 	plaintext := "password123"
 	validPassword, err := encryption.EncryptWithAES(plaintext, correctKey)
@@ -121,7 +121,7 @@ func TestDeriveEncryptionKey(t *testing.T) {
 	salt, err := encryption.GenerateSalt()
 	require.NoError(t, err)
 
-	key := encryption.DeriveEncryptionKey(masterPassword, salt)
+	key := encryption.DeriveEncryptionKeyFromMasterPassword(masterPassword, salt)
 	assert.Len(t, key, 32)
 }
 

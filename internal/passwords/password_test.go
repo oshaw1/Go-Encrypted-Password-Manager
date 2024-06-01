@@ -24,7 +24,7 @@ func TestStorePassword(t *testing.T) {
 	testCases := []struct {
 		name         string
 		title        string
-		link         string
+		hyperlink    string
 		password     string
 		wantErr      bool
 		errorMessage string
@@ -32,7 +32,7 @@ func TestStorePassword(t *testing.T) {
 		{
 			name:         "Valid password",
 			title:        "Test Title",
-			link:         "https://example.com",
+			hyperlink:    "https://example.com",
 			password:     "password123",
 			wantErr:      false,
 			errorMessage: "",
@@ -40,7 +40,7 @@ func TestStorePassword(t *testing.T) {
 		{
 			name:         "Empty password",
 			title:        "Test Title",
-			link:         "https://example.com",
+			hyperlink:    "https://example.com",
 			password:     "",
 			wantErr:      true,
 			errorMessage: "password cannot be empty",
@@ -48,15 +48,15 @@ func TestStorePassword(t *testing.T) {
 		{
 			name:         "Empty title",
 			title:        "",
-			link:         "https://example.com",
+			hyperlink:    "https://example.com",
 			password:     "password123",
 			wantErr:      false,
 			errorMessage: "",
 		},
 		{
-			name:         "Empty link",
+			name:         "Empty hyperlink",
 			title:        "Test Title",
-			link:         "",
+			hyperlink:    "",
 			password:     "password123",
 			wantErr:      false,
 			errorMessage: "",
@@ -65,7 +65,7 @@ func TestStorePassword(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := passwords.StorePassword(tc.title, tc.link, tc.password, masterPassword, passwordFilePath)
+			err := passwords.StorePassword(tc.title, tc.hyperlink, tc.password, masterPassword, passwordFilePath)
 			if tc.wantErr {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tc.errorMessage)
@@ -88,9 +88,9 @@ func TestRetrievePassword(t *testing.T) {
 	assert.NoError(t, err)
 
 	title := "Test Title"
-	link := "https://example.com"
+	hyperlink := "https://example.com"
 	password := "password123"
-	err = passwords.StorePassword(title, link, password, masterPassword, passwordFilePath)
+	err = passwords.StorePassword(title, hyperlink, password, masterPassword, passwordFilePath)
 	require.NoError(t, err)
 
 	data, err := passwords.ReadPasswordManager(passwordFilePath)
@@ -142,7 +142,7 @@ func TestRetrievePassword(t *testing.T) {
 }
 
 func TestCheckPasswordFileExists(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "password-manager-test-")
+	tempDir, err := os.MkdirTemp("", "password-test-")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
@@ -173,6 +173,71 @@ func TestCheckPasswordFileExists(t *testing.T) {
 			tc.setupFunc()
 			exists := passwords.CheckPasswordFileExistsInDataDirectory(passwordFilePath)
 			assert.Equal(t, tc.expectedValue, exists)
+		})
+	}
+}
+
+func TestDeletePasswordByID(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "password-manager-test-")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+	passwordFilePath := filepath.Join(tempDir, "passwords.json")
+
+	masterPassword := "master-password"
+
+	err = passwords.InitializePasswordManager(masterPassword, passwordFilePath)
+	assert.NoError(t, err)
+
+	title := "Test Title"
+	link := "https://example.com"
+	password := "password123"
+	err = passwords.StorePassword(title, link, password, masterPassword, passwordFilePath)
+	require.NoError(t, err)
+
+	data, err := passwords.ReadPasswordManager(passwordFilePath)
+	require.NoError(t, err)
+	passwordID := data.Passwords[0].ID
+
+	testCases := []struct {
+		name           string
+		id             string
+		masterPassword string
+		wantErr        bool
+	}{
+		{
+			name:           "Valid password deletion",
+			id:             passwordID,
+			masterPassword: masterPassword,
+			wantErr:        false,
+		},
+		{
+			name:           "Invalid password ID",
+			id:             "invalid-id",
+			masterPassword: masterPassword,
+			wantErr:        true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			originalData, err := passwords.ReadPasswordManager(passwordFilePath)
+			require.NoError(t, err)
+
+			err = passwords.DeletePasswordByID(tc.id, tc.masterPassword, passwordFilePath)
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			updatedData, err := passwords.ReadPasswordManager(passwordFilePath)
+			require.NoError(t, err)
+
+			if tc.wantErr {
+				assert.Equal(t, originalData, updatedData)
+			} else {
+				assert.Empty(t, updatedData.Passwords)
+			}
 		})
 	}
 }

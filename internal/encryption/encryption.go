@@ -60,7 +60,7 @@ func DecryptWithAES(ciphertext string, key []byte) (string, error) {
 	return string(ciphertextBytes), nil
 }
 
-func DeriveEncryptionKey(masterPassword string, salt []byte) []byte {
+func DeriveEncryptionKeyFromMasterPassword(masterPassword string, salt []byte) []byte {
 	iterations := 100000
 	keyLength := 32
 
