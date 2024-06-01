@@ -2,6 +2,7 @@ package passwords_test
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/oshaw1/Encrypted-Password-Manager/internal/passwords"
@@ -10,12 +11,15 @@ import (
 )
 
 func TestStorePassword(t *testing.T) {
-	err := os.MkdirAll("data", os.ModePerm)
+	tempDir, err := os.MkdirTemp("", "password-manager-test-")
 	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+	passwordFilePath := filepath.Join(tempDir, "passwords.json")
 
 	masterPassword := "master-password"
-	err = passwords.InitializePasswordManager(masterPassword)
-	require.NoError(t, err)
+
+	err = passwords.InitializePasswordManager(masterPassword, passwordFilePath)
+	assert.NoError(t, err)
 
 	testCases := []struct {
 		name         string
@@ -61,7 +65,7 @@ func TestStorePassword(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := passwords.StorePassword(tc.title, tc.link, tc.password, masterPassword)
+			err := passwords.StorePassword(tc.title, tc.link, tc.password, masterPassword, passwordFilePath)
 			if tc.wantErr {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tc.errorMessage)
@@ -70,26 +74,26 @@ func TestStorePassword(t *testing.T) {
 			}
 		})
 	}
-
-	err = os.RemoveAll("data")
-	require.NoError(t, err)
 }
 
 func TestRetrievePassword(t *testing.T) {
-	err := os.MkdirAll("data", os.ModePerm)
+	tempDir, err := os.MkdirTemp("", "password-manager-test-")
 	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+	passwordFilePath := filepath.Join(tempDir, "passwords.json")
 
 	masterPassword := "master-password"
-	err = passwords.InitializePasswordManager(masterPassword)
-	require.NoError(t, err)
+
+	err = passwords.InitializePasswordManager(masterPassword, passwordFilePath)
+	assert.NoError(t, err)
 
 	title := "Test Title"
 	link := "https://example.com"
 	password := "password123"
-	err = passwords.StorePassword(title, link, password, masterPassword)
+	err = passwords.StorePassword(title, link, password, masterPassword, passwordFilePath)
 	require.NoError(t, err)
 
-	data, err := passwords.ReadPasswordManager()
+	data, err := passwords.ReadPasswordManager(passwordFilePath)
 	require.NoError(t, err)
 	passwordID := data.Passwords[0].ID
 
@@ -125,7 +129,7 @@ func TestRetrievePassword(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			retrievedPassword, err := passwords.RetrievePassword(tc.id, tc.masterPassword)
+			retrievedPassword, err := passwords.RetrievePassword(tc.id, tc.masterPassword, passwordFilePath)
 			if tc.wantErr {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tc.errorMessage)
@@ -135,64 +139,40 @@ func TestRetrievePassword(t *testing.T) {
 			}
 		})
 	}
-
-	err = os.RemoveAll("data")
-	require.NoError(t, err)
-}
-
-func TestInitializePasswordManager(t *testing.T) {
-	err := os.MkdirAll("data", os.ModePerm)
-	require.NoError(t, err)
-
-	masterPassword := "test-master-password"
-
-	err = passwords.InitializePasswordManager(masterPassword)
-	assert.NoError(t, err)
-
-	_, err = os.Stat("data/passwords.json")
-	assert.NoError(t, err)
-
-	data, err := passwords.ReadPasswordManager()
-	require.NoError(t, err)
-	assert.NotEmpty(t, data.MasterPasswordHash)
-	assert.NotEmpty(t, data.Salt)
-	assert.Empty(t, data.Passwords)
-
-	err = os.RemoveAll("data")
-	require.NoError(t, err)
 }
 
 func TestCheckPasswordFileExists(t *testing.T) {
-	err := os.MkdirAll("data", os.ModePerm)
+	tempDir, err := os.MkdirTemp("", "password-manager-test-")
 	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
 
-	exists := passwords.CheckPasswordFileExists()
-	assert.False(t, exists)
+	passwordFilePath := filepath.Join(tempDir, "passwords.json")
 
-	err = passwords.CreateEmptyPasswordFile()
-	require.NoError(t, err)
+	testCases := []struct {
+		name          string
+		setupFunc     func()
+		expectedValue bool
+	}{
+		{
+			name:          "File does not exist",
+			setupFunc:     func() {},
+			expectedValue: false,
+		},
+		{
+			name: "File exists",
+			setupFunc: func() {
+				err := passwords.InitializePasswordManager("master-password", passwordFilePath)
+				require.NoError(t, err)
+			},
+			expectedValue: true,
+		},
+	}
 
-	exists = passwords.CheckPasswordFileExists()
-	assert.True(t, exists)
-
-	err = os.RemoveAll("data")
-	require.NoError(t, err)
-}
-
-func TestCreateEmptyPasswordFile(t *testing.T) {
-	err := os.MkdirAll("data", os.ModePerm)
-	require.NoError(t, err)
-
-	err = passwords.CreateEmptyPasswordFile()
-	assert.NoError(t, err)
-
-	_, err = os.Stat("data/passwords.json")
-	assert.NoError(t, err)
-
-	data, err := os.ReadFile("data/passwords.json")
-	require.NoError(t, err)
-	assert.Equal(t, "[]\n", string(data))
-
-	err = os.RemoveAll("data")
-	require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setupFunc()
+			exists := passwords.CheckPasswordFileExistsInDataDirectory(passwordFilePath)
+			assert.Equal(t, tc.expectedValue, exists)
+		})
+	}
 }

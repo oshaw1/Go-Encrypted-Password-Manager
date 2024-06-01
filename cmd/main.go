@@ -9,9 +9,10 @@ import (
 
 func main() {
 	masterPassword := "master-password"
+	dataDirectory := "data/passwords.json"
 
-	if !passwords.CheckPasswordFileExists() {
-		err := passwords.InitializePasswordManager(masterPassword)
+	if !passwords.CheckPasswordFileExistsInDataDirectory(dataDirectory) {
+		err := passwords.InitializePasswordManager(masterPassword, dataDirectory)
 		if err != nil {
 			fmt.Println("Failed to initialize password data:", err)
 			return
@@ -19,22 +20,15 @@ func main() {
 		fmt.Println("Password data initialized successfully")
 	}
 
-	err := passwords.StorePassword("Example Title", "https://example.com", "password123", masterPassword)
+	err := passwords.StorePassword("Example Title", "https://example.com", "password123", masterPassword, dataDirectory)
 	if err != nil {
 		fmt.Println("Failed to store password:", err)
 	} else {
 		fmt.Println("Password stored successfully")
 	}
 
-	err = passwords.StorePassword("", "", "password456", masterPassword)
-	if err != nil {
-		fmt.Println("Failed to store password:", err)
-	} else {
-		fmt.Println("Password stored successfully")
-	}
-
-	passwordID := "16659de2-c2c5-4715-8fb7-c664eb77021a"
-	retrievedPassword, err := passwords.RetrievePassword(passwordID, masterPassword)
+	passwordID := "e27acad0-f57f-4d5f-a431-7d2263f026e5"
+	retrievedPassword, err := passwords.RetrievePassword(passwordID, masterPassword, dataDirectory)
 	if err != nil {
 		fmt.Printf("Failed to retrieve password: %v\n", err)
 		os.Exit(1)
