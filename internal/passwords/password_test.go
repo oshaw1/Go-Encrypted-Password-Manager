@@ -13,24 +13,58 @@ func TestStorePassword(t *testing.T) {
 	err := os.MkdirAll("data", os.ModePerm)
 	require.NoError(t, err)
 
+	masterPassword := "master-password"
+	err = passwords.InitializePasswordManager(masterPassword)
+	require.NoError(t, err)
+
 	testCases := []struct {
-		name     string
-		title    string
-		link     string
-		password string
-		wantErr  bool
+		name         string
+		title        string
+		link         string
+		password     string
+		wantErr      bool
+		errorMessage string
 	}{
-		{"Valid password", "Test Title", "https://example.com", "password123", false},
-		{"Empty password", "Test Title", "https://example.com", "", true},
-		{"Empty title", "", "https://example.com", "password123", false},
-		{"Empty title", "Test title", "", "password123", false},
+		{
+			name:         "Valid password",
+			title:        "Test Title",
+			link:         "https://example.com",
+			password:     "password123",
+			wantErr:      false,
+			errorMessage: "",
+		},
+		{
+			name:         "Empty password",
+			title:        "Test Title",
+			link:         "https://example.com",
+			password:     "",
+			wantErr:      true,
+			errorMessage: "password cannot be empty",
+		},
+		{
+			name:         "Empty title",
+			title:        "",
+			link:         "https://example.com",
+			password:     "password123",
+			wantErr:      false,
+			errorMessage: "",
+		},
+		{
+			name:         "Empty link",
+			title:        "Test Title",
+			link:         "",
+			password:     "password123",
+			wantErr:      false,
+			errorMessage: "",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := passwords.StorePassword(tc.title, tc.link, tc.password)
+			err := passwords.StorePassword(tc.title, tc.link, tc.password, masterPassword)
 			if tc.wantErr {
 				assert.Error(t, err)
+				assert.EqualError(t, err, tc.errorMessage)
 			} else {
 				assert.NoError(t, err)
 			}
@@ -41,26 +75,63 @@ func TestStorePassword(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestWritePasswords(t *testing.T) {
+func TestRetrievePassword(t *testing.T) {
 	err := os.MkdirAll("data", os.ModePerm)
 	require.NoError(t, err)
 
+	masterPassword := "master-password"
+	err = passwords.InitializePasswordManager(masterPassword)
+	require.NoError(t, err)
+
+	title := "Test Title"
+	link := "https://example.com"
+	password := "password123"
+	err = passwords.StorePassword(title, link, password, masterPassword)
+	require.NoError(t, err)
+
+	data, err := passwords.ReadPasswordManager()
+	require.NoError(t, err)
+	passwordID := data.Passwords[0].ID
+
 	testCases := []struct {
-		name      string
-		passwords []passwords.Password
-		wantErr   bool
+		name           string
+		id             string
+		masterPassword string
+		wantErr        bool
+		errorMessage   string
 	}{
-		{"Valid passwords", []passwords.Password{{ID: "1", Title: "Test", Link: "https://example.com", HashedPassword: "hashed"}}, false},
-		{"Empty passwords", []passwords.Password{}, false},
+		{
+			name:           "Valid password retrieval",
+			id:             passwordID,
+			masterPassword: masterPassword,
+			wantErr:        false,
+			errorMessage:   "",
+		},
+		{
+			name:           "Invalid password ID",
+			id:             "invalid-id",
+			masterPassword: masterPassword,
+			wantErr:        true,
+			errorMessage:   "password not found",
+		},
+		{
+			name:           "Invalid master password",
+			id:             passwordID,
+			masterPassword: "wrong-password",
+			wantErr:        true,
+			errorMessage:   "invalid master password",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := passwords.WritePasswords(tc.passwords)
+			retrievedPassword, err := passwords.RetrievePassword(tc.id, tc.masterPassword)
 			if tc.wantErr {
 				assert.Error(t, err)
+				assert.EqualError(t, err, tc.errorMessage)
 			} else {
 				assert.NoError(t, err)
+				assert.Equal(t, password, retrievedPassword)
 			}
 		})
 	}
@@ -69,39 +140,58 @@ func TestWritePasswords(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestReadPasswords(t *testing.T) {
+func TestInitializePasswordManager(t *testing.T) {
 	err := os.MkdirAll("data", os.ModePerm)
 	require.NoError(t, err)
 
-	testCases := []struct {
-		name    string
-		setup   func()
-		want    []passwords.Password
-		wantErr bool
-	}{
-		{"Valid passwords", func() {
-			passwords.WritePasswords([]passwords.Password{{ID: "1", Title: "Test", Link: "https://example.com", HashedPassword: "hashed"}})
-		}, []passwords.Password{{ID: "1", Title: "Test", Link: "https://example.com", HashedPassword: "hashed"}}, false},
-		{"Empty passwords", func() {
-			passwords.WritePasswords([]passwords.Password{})
-		}, []passwords.Password{}, false},
-		{"Non-existent file", func() {
-			os.Remove("data/passwords.json")
-		}, []passwords.Password{}, false},
-	}
+	masterPassword := "test-master-password"
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			tc.setup()
-			got, err := passwords.ReadPasswords()
-			if tc.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tc.want, got)
-			}
-		})
-	}
+	err = passwords.InitializePasswordManager(masterPassword)
+	assert.NoError(t, err)
+
+	_, err = os.Stat("data/passwords.json")
+	assert.NoError(t, err)
+
+	data, err := passwords.ReadPasswordManager()
+	require.NoError(t, err)
+	assert.NotEmpty(t, data.MasterPasswordHash)
+	assert.NotEmpty(t, data.Salt)
+	assert.Empty(t, data.Passwords)
+
+	err = os.RemoveAll("data")
+	require.NoError(t, err)
+}
+
+func TestCheckPasswordFileExists(t *testing.T) {
+	err := os.MkdirAll("data", os.ModePerm)
+	require.NoError(t, err)
+
+	exists := passwords.CheckPasswordFileExists()
+	assert.False(t, exists)
+
+	err = passwords.CreateEmptyPasswordFile()
+	require.NoError(t, err)
+
+	exists = passwords.CheckPasswordFileExists()
+	assert.True(t, exists)
+
+	err = os.RemoveAll("data")
+	require.NoError(t, err)
+}
+
+func TestCreateEmptyPasswordFile(t *testing.T) {
+	err := os.MkdirAll("data", os.ModePerm)
+	require.NoError(t, err)
+
+	err = passwords.CreateEmptyPasswordFile()
+	assert.NoError(t, err)
+
+	_, err = os.Stat("data/passwords.json")
+	assert.NoError(t, err)
+
+	data, err := os.ReadFile("data/passwords.json")
+	require.NoError(t, err)
+	assert.Equal(t, "[]\n", string(data))
 
 	err = os.RemoveAll("data")
 	require.NoError(t, err)

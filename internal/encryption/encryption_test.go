@@ -1,42 +1,132 @@
 package encryption_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/oshaw1/Encrypted-Password-Manager/internal/encryption"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestEncryptWithSHA256(t *testing.T) {
+func TestEncryptDecryptWithAES(t *testing.T) {
+	masterPassword := "your-master-password"
+	salt, err := encryption.GenerateSalt()
+	require.NoError(t, err)
+	correctKey := encryption.DeriveEncryptionKey(masterPassword, salt)
+
 	testCases := []struct {
 		name      string
 		plaintext string
-		expected  string
+		key       []byte
 		wantErr   bool
 	}{
 		{
-			name:      "Valid plaintext",
+			name:      "Valid plaintext with correct key",
 			plaintext: "password123",
-			expected:  "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+			key:       correctKey,
 			wantErr:   false,
 		},
 		{
-			name:      "Empty plaintext",
+			name:      "Empty plaintext with correct key",
 			plaintext: "",
-			expected:  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			key:       correctKey,
 			wantErr:   false,
+		},
+		{
+			name:      "Valid plaintext with empty key",
+			plaintext: "password123",
+			key:       []byte{},
+			wantErr:   true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := encryption.EncryptWithSHA256(tc.plaintext)
+			encrypted, err := encryption.EncryptWithAES(tc.plaintext, tc.key)
 			if tc.wantErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tc.expected, got)
+				decrypted, err := encryption.DecryptWithAES(encrypted, tc.key)
+				if reflect.DeepEqual(tc.key, correctKey) {
+					assert.NoError(t, err)
+					assert.Equal(t, tc.plaintext, decrypted)
+				} else {
+					assert.Error(t, err)
+				}
 			}
 		})
 	}
+}
+
+func TestDecryptWithAES(t *testing.T) {
+	masterPassword := "your-master-password"
+	incorrectPassword := "incorrect-password"
+	salt, err := encryption.GenerateSalt()
+	require.NoError(t, err)
+	correctKey := encryption.DeriveEncryptionKey(masterPassword, salt)
+	incorrectKey := encryption.DeriveEncryptionKey(incorrectPassword, salt)
+
+	plaintext := "password123"
+	validPassword, err := encryption.EncryptWithAES(plaintext, correctKey)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name     string
+		password string
+		key      []byte
+		wantErr  bool
+	}{
+		{
+			name:     "Valid password with correct key",
+			password: validPassword,
+			key:      correctKey,
+			wantErr:  false,
+		},
+		{
+			name:     "Valid password with incorrect key",
+			password: validPassword,
+			key:      incorrectKey,
+			wantErr:  true,
+		},
+		{
+			name:     "Empty password with correct key",
+			password: "",
+			key:      correctKey,
+			wantErr:  true,
+		},
+		{
+			name:     "Invalid password with correct key",
+			password: "invalid-password",
+			key:      correctKey,
+			wantErr:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := encryption.DecryptWithAES(tc.password, tc.key)
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestDeriveEncryptionKey(t *testing.T) {
+	masterPassword := "master-password"
+	salt, err := encryption.GenerateSalt()
+	require.NoError(t, err)
+
+	key := encryption.DeriveEncryptionKey(masterPassword, salt)
+	assert.Len(t, key, 32)
+}
+
+func TestGenerateSalt(t *testing.T) {
+	salt, err := encryption.GenerateSalt()
+	assert.NoError(t, err)
+	assert.Len(t, salt, 16)
 }

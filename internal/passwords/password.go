@@ -1,6 +1,7 @@
 package passwords
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,84 +12,138 @@ import (
 )
 
 type Password struct {
-	ID             string `json:"id"`
-	Title          string `json:"title"`
-	Link           string `json:"hyperlink"`
-	HashedPassword string `json:"hashed_password"`
+	ID                string `json:"id"`
+	Title             string `json:"title"`
+	Link              string `json:"hyperlink"`
+	EncryptedPassword string `json:"encrypted_password"`
 }
 
-func StorePassword(title, link, password string) error {
+type PasswordManager struct {
+	MasterPasswordHash string     `json:"master_password_hash"`
+	Salt               []byte     `json:"salt"`
+	Passwords          []Password `json:"passwords"`
+}
+
+func StorePassword(title, link, password, masterPassword string) error {
 	if password == "" {
 		return fmt.Errorf("password cannot be empty")
 	}
 
-	hashedPassword, err := encryption.EncryptWithSHA256(password)
+	manager, err := ReadPasswordManager()
 	if err != nil {
-		return fmt.Errorf("failed to hash password: %w", err)
+		return fmt.Errorf("failed to read password manager: %w", err)
+	}
+
+	encryptionKey := encryption.DeriveEncryptionKey(masterPassword, manager.Salt)
+
+	encryptedPassword, err := encryption.EncryptWithAES(password, encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt password: %w", err)
 	}
 
 	entry := Password{
-		ID:             uuid.New().String(),
-		Title:          title,
-		Link:           link,
-		HashedPassword: hashedPassword,
+		ID:                uuid.New().String(),
+		Title:             title,
+		Link:              link,
+		EncryptedPassword: encryptedPassword,
 	}
 
-	passwords, err := ReadPasswords()
-	if err != nil {
-		return fmt.Errorf("failed to read passwords: %w", err)
-	}
+	manager.Passwords = append(manager.Passwords, entry)
 
-	passwords = append(passwords, entry)
-
-	err = WritePasswords(passwords)
+	err = writePasswordManager(manager)
 	if err != nil {
-		return fmt.Errorf("failed to write passwords: %w", err)
+		return fmt.Errorf("failed to write password manager: %w", err)
 	}
 
 	return nil
 }
 
-func WritePasswords(passwords []Password) error {
-	filePath := "data/passwords.json"
-
-	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+func RetrievePassword(id, masterPassword string) (string, error) {
+	manager, err := ReadPasswordManager()
 	if err != nil {
-		return fmt.Errorf("failed to open passwords.json: %w", err)
-	}
-	defer file.Close()
-
-	jsonData, err := json.MarshalIndent(passwords, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal passwords: %w", err)
+		return "", fmt.Errorf("failed to read password manager: %w", err)
 	}
 
-	_, err = file.Write(jsonData)
+	if !verifyMasterPassword(masterPassword, manager.MasterPasswordHash) {
+		return "", fmt.Errorf("invalid master password")
+	}
+
+	encryptionKey := encryption.DeriveEncryptionKey(masterPassword, manager.Salt)
+
+	for _, password := range manager.Passwords {
+		if password.ID == id {
+			decryptedPassword, err := encryption.DecryptWithAES(password.EncryptedPassword, encryptionKey)
+			if err != nil {
+				return "", fmt.Errorf("failed to decrypt password: %w", err)
+			}
+			return decryptedPassword, nil
+		}
+	}
+
+	return "", fmt.Errorf("password not found")
+}
+
+func InitializePasswordManager(masterPassword string) error {
+	salt, err := encryption.GenerateSalt()
 	if err != nil {
-		return fmt.Errorf("failed to write passwords to file: %w", err)
+		return fmt.Errorf("failed to generate salt: %w", err)
+	}
+
+	passwordHash := hashMasterPassword(masterPassword)
+
+	manager := PasswordManager{
+		MasterPasswordHash: passwordHash,
+		Salt:               salt,
+		Passwords:          []Password{},
+	}
+
+	err = writePasswordManager(manager)
+	if err != nil {
+		return fmt.Errorf("failed to write password manager: %w", err)
 	}
 
 	return nil
 }
 
-func ReadPasswords() ([]Password, error) {
-	filePath := "data/passwords.json"
-
-	fileData, err := os.ReadFile(filePath)
+func ReadPasswordManager() (PasswordManager, error) {
+	file, err := os.ReadFile("data/passwords.json")
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []Password{}, nil
+			return PasswordManager{}, nil
 		}
-		return nil, fmt.Errorf("failed to read passwords file: %w", err)
+		return PasswordManager{}, fmt.Errorf("failed to read password manager file: %w", err)
 	}
 
-	var passwords []Password
-	err = json.Unmarshal(fileData, &passwords)
+	var manager PasswordManager
+	err = json.Unmarshal(file, &manager)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal passwords: %w", err)
+		return PasswordManager{}, fmt.Errorf("failed to unmarshal password manager: %w", err)
 	}
 
-	return passwords, nil
+	return manager, nil
+}
+
+func writePasswordManager(manager PasswordManager) error {
+	file, err := json.MarshalIndent(manager, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal password manager: %w", err)
+	}
+
+	err = os.WriteFile("data/passwords.json", file, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to write password manager file: %w", err)
+	}
+
+	return nil
+}
+
+func hashMasterPassword(masterPassword string) string {
+	hash := sha256.Sum256([]byte(masterPassword))
+	return fmt.Sprintf("%x", hash)
+}
+
+func verifyMasterPassword(masterPassword, hashedPassword string) bool {
+	return hashMasterPassword(masterPassword) == hashedPassword
 }
 
 func CheckPasswordFileExists() bool {
