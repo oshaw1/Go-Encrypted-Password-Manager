@@ -80,6 +80,42 @@ func RetrievePassword(id, masterPassword string, pathToPasswordFile string) (str
 	return "", fmt.Errorf("password not found")
 }
 
+func DeletePassword(id, masterPassword string, pathToPasswordFile string) error {
+	manager, err := ReadPasswordManager(pathToPasswordFile)
+	if err != nil {
+		return fmt.Errorf("failed to read password manager: %w", err)
+	}
+
+	encryptionKey := encryption.DeriveEncryptionKey(masterPassword, manager.Salt)
+
+	foundIndex := -1
+	for i, password := range manager.Passwords {
+		if password.ID == id {
+			decryptedPassword, err := encryption.DecryptWithAES(password.EncryptedPassword, encryptionKey)
+			if err != nil {
+				return fmt.Errorf("failed to decrypt password: %w", err)
+			}
+
+			fmt.Printf("Deleting password for title: %s, link: %s, password: %s\n", password.Title, password.Link, decryptedPassword)
+			foundIndex = i
+			break
+		}
+	}
+
+	if foundIndex == -1 {
+		return fmt.Errorf("password not found")
+	}
+
+	manager.Passwords = append(manager.Passwords[:foundIndex], manager.Passwords[foundIndex+1:]...)
+
+	err = writePasswordManager(manager, pathToPasswordFile)
+	if err != nil {
+		return fmt.Errorf("failed to write password manager: %w", err)
+	}
+
+	return nil
+}
+
 func CheckPasswordFileExistsInDataDirectory(dataDir string) bool {
 	_, err := os.Stat(dataDir)
 	return !os.IsNotExist(err)
