@@ -3,7 +3,9 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -29,15 +31,17 @@ func NewPasswordVaultContainer(pathToPasswordFile string, masterPassword string,
 			formItems := []*widget.FormItem{
 				widget.NewFormItem("Title", widget.NewEntry()),
 				widget.NewFormItem("Link", widget.NewEntry()),
+				widget.NewFormItem("Username: ", widget.NewEntry()),
 				widget.NewFormItem("Password", widget.NewPasswordEntry()),
 			}
 			newPasswordForm := dialog.NewForm("Add new password", "Add Password", "Dismiss", formItems, func(b bool) {
 				if b {
 					title := formItems[0].Widget.(*widget.Entry).Text
 					link := formItems[1].Widget.(*widget.Entry).Text
-					password := formItems[2].Widget.(*widget.Entry).Text
+					username := formItems[2].Widget.(*widget.Entry).Text
+					password := formItems[3].Widget.(*widget.Entry).Text
 
-					err := passwords.StorePassword(title, link, password, masterPassword, pathToPasswordFile)
+					err := passwords.StorePassword(title, link, username, password, masterPassword, pathToPasswordFile)
 					if err != nil {
 						dialog.NewError(err, window)
 						fmt.Println("Error storing password:", err)
@@ -114,9 +118,11 @@ func createPasswordCard(pathToPasswordFile string, masterPassword string, window
 
 	var passwordCards []fyne.CanvasObject
 	for _, password := range passwordData.Passwords {
-		passwordLabel := widget.NewLabel("Password: " + password.EncryptedPassword)
-		hyperLinkLabel := ("Link: " + password.Hyperlink)
-		passwordCard := widget.NewCard(password.Title, hyperLinkLabel, passwordLabel)
+		hyperLinkLabel := widget.NewLabel("Link:  " + randomStars())
+		usernameLabel := widget.NewLabel("Username / Account:  " + randomStars())
+		passwordLabel := widget.NewLabel("Password:  " + randomStars())
+		labelContainer := container.NewVBox(hyperLinkLabel, usernameLabel, passwordLabel)
+		passwordCard := widget.NewCard(password.Title, "", labelContainer)
 
 		passwordButtonsContainer := container.NewVBox(
 			widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), func() {}),
@@ -128,6 +134,15 @@ func createPasswordCard(pathToPasswordFile string, masterPassword string, window
 	}
 
 	return container.New(layout.NewVBoxLayout(), passwordCards...)
+}
+
+func randomStars() string {
+	minLength := 5
+	maxLength := 15
+
+	randomLength := rand.Intn(maxLength-minLength+1) + minLength
+	asterisks := strings.Repeat("*", randomLength)
+	return asterisks
 }
 
 func createDecryptedPasswordCard(pathToPasswordFile string, masterPassword string, window fyne.Window, vaultContentContainer *fyne.Container) fyne.CanvasObject {
@@ -154,13 +169,16 @@ func createDecryptedPasswordCard(pathToPasswordFile string, masterPassword strin
 
 	for _, password := range passwordData.Passwords {
 		passwordID := password.ID
-		retrievedPassword, err := passwords.RetrievePassword(passwordID, masterPassword, pathToPasswordFile)
+		retrievedLink, retrievedUsername, retrievedPassword, err := passwords.RetrievePassword(passwordID, masterPassword, pathToPasswordFile)
 		if err != nil {
 			fmt.Printf("Failed to retrieve password for ID %s: %v\n", passwordID, err)
+			dialog.NewError(err, window)
 		}
-		passwordLabel := widget.NewLabel("Password: " + retrievedPassword)
-		hyperLinkLabel := ("Link: " + password.Hyperlink)
-		passwordCard := widget.NewCard(password.Title, hyperLinkLabel, passwordLabel)
+		hyperLinkLabel := widget.NewLabel("Link:  " + retrievedLink)
+		usernameLabel := widget.NewLabel("Username / Account:  " + retrievedUsername)
+		passwordLabel := widget.NewLabel("Password:  " + retrievedPassword)
+		labelContainer := container.NewVBox(hyperLinkLabel, usernameLabel, passwordLabel)
+		passwordCard := widget.NewCard(password.Title, "", labelContainer)
 
 		passwordButtonsContainer := container.NewVBox(
 			widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), func() {}),

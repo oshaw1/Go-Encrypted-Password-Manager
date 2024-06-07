@@ -65,7 +65,7 @@ func TestStorePassword(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := passwords.StorePassword(tc.title, tc.hyperlink, tc.password, masterPassword, passwordFilePath)
+			err := passwords.StorePassword(tc.title, tc.hyperlink, tc.password, masterPassword, passwordFilePath, "username")
 			if tc.wantErr {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tc.errorMessage)
@@ -90,7 +90,7 @@ func TestRetrievePassword(t *testing.T) {
 	title := "Test Title"
 	hyperlink := "https://example.com"
 	password := "password123"
-	err = passwords.StorePassword(title, hyperlink, password, masterPassword, passwordFilePath)
+	err = passwords.StorePassword(title, hyperlink, password, masterPassword, passwordFilePath, "username")
 	require.NoError(t, err)
 
 	data, err := passwords.ReadPasswordManager(passwordFilePath)
@@ -129,7 +129,7 @@ func TestRetrievePassword(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			retrievedPassword, err := passwords.RetrievePassword(tc.id, tc.masterPassword, passwordFilePath)
+			retrievedPassword, _, _, err := passwords.RetrievePassword(tc.id, tc.masterPassword, passwordFilePath)
 			if tc.wantErr {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tc.errorMessage)
@@ -191,7 +191,7 @@ func TestDeletePasswordByID(t *testing.T) {
 	title := "Test Title"
 	link := "https://example.com"
 	password := "password123"
-	err = passwords.StorePassword(title, link, password, masterPassword, passwordFilePath)
+	err = passwords.StorePassword(title, link, password, masterPassword, passwordFilePath, "username")
 	require.NoError(t, err)
 
 	data, err := passwords.ReadPasswordManager(passwordFilePath)

@@ -12,6 +12,7 @@ type Password struct {
 	ID                string `json:"id"`
 	Title             string `json:"title"`
 	Link              string `json:"hyperlink"`
+	Username          string `json:"username/account"`
 	EncryptedPassword string `json:"encrypted_password"`
 }
 
@@ -21,7 +22,7 @@ type PasswordManager struct {
 	Passwords          []Password `json:"passwords"`
 }
 
-func StorePassword(title, link, password, masterPassword string, pathToPasswordFile string) error {
+func StorePassword(title, link, username, password, masterPassword string, pathToPasswordFile string) error {
 	if password == "" {
 		return fmt.Errorf("password cannot be empty")
 	}
@@ -37,11 +38,20 @@ func StorePassword(title, link, password, masterPassword string, pathToPasswordF
 	if err != nil {
 		return fmt.Errorf("failed to encrypt password: %w", err)
 	}
+	encryptedLink, err := encryption.EncryptWithAES(link, encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt password: %w", err)
+	}
+	encryptedUsername, err := encryption.EncryptWithAES(username, encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt password: %w", err)
+	}
 
 	entry := Password{
 		ID:                uuid.New().String(),
 		Title:             title,
-		Link:              link,
+		Link:              encryptedLink,
+		Username:          encryptedUsername,
 		EncryptedPassword: encryptedPassword,
 	}
 
@@ -55,29 +65,37 @@ func StorePassword(title, link, password, masterPassword string, pathToPasswordF
 	return nil
 }
 
-func RetrievePassword(id, masterPassword string, pathToPasswordFile string) (string, error) {
+func RetrievePassword(id, masterPassword string, pathToPasswordFile string) (decryptedLink string, decryptedUsername string, decryptedPassword string, err error) {
 	manager, err := ReadPasswordManager(pathToPasswordFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to read password manager: %w", err)
+		return "", "", "", fmt.Errorf("failed to read password manager: %w", err)
 	}
 
 	if !VerifyMasterPasswordIsHashedPassword(masterPassword, manager.MasterPasswordHash) {
-		return "", fmt.Errorf("invalid master password")
+		return "", "", "", fmt.Errorf("invalid master password")
 	}
 
 	encryptionKey := encryption.DeriveEncryptionKeyFromMasterPassword(masterPassword, manager.Salt)
 
 	for _, password := range manager.Passwords {
 		if password.ID == id {
+			decryptedLink, err := encryption.DecryptWithAES(password.Link, encryptionKey)
+			if err != nil {
+				return "", "", "", fmt.Errorf("failed to decrypt link: %w", err)
+			}
+			decryptedUsername, err := encryption.DecryptWithAES(password.Username, encryptionKey)
+			if err != nil {
+				return "", "", "", fmt.Errorf("failed to decrypt username: %w", err)
+			}
 			decryptedPassword, err := encryption.DecryptWithAES(password.EncryptedPassword, encryptionKey)
 			if err != nil {
-				return "", fmt.Errorf("failed to decrypt password: %w", err)
+				return "", "", "", fmt.Errorf("failed to decrypt password: %w", err)
 			}
-			return decryptedPassword, nil
+			return decryptedLink, decryptedUsername, decryptedPassword, nil
 		}
 	}
 
-	return "", fmt.Errorf("password not found")
+	return "", "", "", fmt.Errorf("password not found")
 }
 
 func DeletePasswordByID(id, masterPassword string, pathToPasswordFile string) error {

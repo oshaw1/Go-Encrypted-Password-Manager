@@ -50,7 +50,7 @@ func main() {
 
 	settingsNavButton := widget.NewButton("Settings", func() {
 		settingsScrollContainer := container.NewVScroll(
-			ui.NewSettingsContainer(),
+			ui.NewSettingsContainer(window),
 		)
 		contentContainer.Objects = []fyne.CanvasObject{settingsScrollContainer}
 		contentContainer.Refresh()

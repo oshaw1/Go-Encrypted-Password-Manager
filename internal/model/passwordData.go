@@ -7,6 +7,7 @@ type PasswordData struct {
 		ID                string `json:"id"`
 		Title             string `json:"title"`
 		Hyperlink         string `json:"hyperlink"`
+		Username          string `json:"username/account"`
 		EncryptedPassword string `json:"encrypted_password"`
 	} `json:"passwords"`
 }
