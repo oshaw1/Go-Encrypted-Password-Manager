@@ -1,28 +1,23 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/oshaw1/Encrypted-Password-Manager/internal/passwords"
+	"github.com/oshaw1/Encrypted-Password-Manager/internal/ui"
 )
 
-type PasswordData struct {
-	MasterPasswordHash string `json:"master_password_hash"`
-	Salt               string `json:"salt"`
-	Passwords          []struct {
-		ID                string `json:"id"`
-		Title             string `json:"title"`
-		Hyperlink         string `json:"hyperlink"`
-		EncryptedPassword string `json:"encrypted_password"`
-	} `json:"passwords"`
-}
-
 func main() {
-	masterPassword := "master-password"
+	masterPassword := "master-password" // change to config later
 	pathToPasswordFile := "data/passwords.json"
 
+	//initialise the required files
 	if !passwords.CheckPasswordFileExistsInDataDirectory(pathToPasswordFile) {
 		err := passwords.InitializePasswordManager(masterPassword, pathToPasswordFile)
 		if err != nil {
@@ -32,42 +27,49 @@ func main() {
 		fmt.Println("Password data initialized successfully")
 	}
 
-	err := passwords.StorePassword("Example Title", "https://example.com", "pnewhdsfusdf", masterPassword, pathToPasswordFile)
-	if err != nil {
-		fmt.Println("Failed to store password:", err)
-	} else {
-		fmt.Println("Password stored successfully")
-	}
+	a := app.New()
+	a.Settings().SetTheme(theme.DefaultTheme())
 
-	data, err := os.ReadFile(pathToPasswordFile)
-	if err != nil {
-		fmt.Printf("Failed to read password file: %v\n", err)
-		os.Exit(1)
-	}
+	window := a.NewWindow("The Vault")
 
-	var passwordData PasswordData
-	err = json.Unmarshal(data, &passwordData)
-	if err != nil {
-		fmt.Printf("Failed to parse JSON data: %v\n", err)
-		os.Exit(1)
-	}
+	passwordVaultScrollContainer := container.NewVScroll(
+		ui.NewPasswordVaultContainer(pathToPasswordFile, masterPassword, window),
+	)
 
-	for _, password := range passwordData.Passwords {
-		passwordTitle := password.Title
-		passwordID := password.ID
-		retrievedPassword, err := passwords.RetrievePassword(passwordID, masterPassword, pathToPasswordFile)
-		if err != nil {
-			fmt.Printf("Failed to retrieve password for ID %s: %v\n", passwordID, err)
-			continue
-		}
-		fmt.Printf("Password for %s: %s\n", passwordTitle, retrievedPassword)
-	}
+	contentContainer := container.NewStack(
+		passwordVaultScrollContainer,
+	)
 
-	// passwordID = "03acf7ae-6076-42c1-94e9-d7114bcf1be0"
-	// err = passwords.DeletePasswordByID(passwordID, masterPassword, pathToPasswordFile)
-	// if err != nil {
-	// 	fmt.Println("Error deleting password:", err)
-	// 	os.Exit(1)
-	// }
-	// fmt.Printf("Retrieved password: %s\n", retrievedPassword)
+	vaultNavButton := widget.NewButton("The Vault", func() {
+		passwordVaultScrollContainer := container.NewVScroll(
+			ui.NewPasswordVaultContainer(pathToPasswordFile, masterPassword, window),
+		)
+		contentContainer.Objects = []fyne.CanvasObject{passwordVaultScrollContainer}
+		contentContainer.Refresh()
+	})
+
+	settingsNavButton := widget.NewButton("Settings", func() {
+		settingsScrollContainer := container.NewVScroll(
+			ui.NewSettingsContainer(),
+		)
+		contentContainer.Objects = []fyne.CanvasObject{settingsScrollContainer}
+		contentContainer.Refresh()
+	})
+
+	navContainer := container.NewVBox(
+		vaultNavButton,
+		settingsNavButton,
+	)
+
+	splitContainer := container.NewHSplit(
+		navContainer,
+		contentContainer,
+	)
+	splitContainer.SetOffset(0.20)
+
+	window.SetContent(splitContainer)
+	window.Resize(fyne.NewSize(1000, 1000))
+	window.CenterOnScreen()
+
+	window.ShowAndRun()
 }

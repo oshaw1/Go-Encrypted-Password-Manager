@@ -75,3 +75,8 @@ func GenerateSalt() ([]byte, error) {
 	}
 	return salt, nil
 }
+
+func HashMasterPassword(masterPassword string) string {
+	hash := sha256.Sum256([]byte(masterPassword))
+	return fmt.Sprintf("%x", hash)
+}

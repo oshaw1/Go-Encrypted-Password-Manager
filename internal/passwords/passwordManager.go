@@ -1,7 +1,6 @@
 package passwords
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,7 +14,7 @@ func InitializePasswordManager(masterPassword string, pathToPasswordFile string)
 		return fmt.Errorf("failed to generate salt: %w", err)
 	}
 
-	passwordHash := hashMasterPassword(masterPassword)
+	passwordHash := encryption.HashMasterPassword(masterPassword)
 
 	manager := PasswordManager{
 		MasterPasswordHash: passwordHash,
@@ -63,11 +62,6 @@ func writePasswordManager(manager PasswordManager, pathToPasswordFile string) er
 	return nil
 }
 
-func hashMasterPassword(masterPassword string) string {
-	hash := sha256.Sum256([]byte(masterPassword))
-	return fmt.Sprintf("%x", hash)
-}
-
 func VerifyMasterPasswordIsHashedPassword(masterPassword, hashedPassword string) bool {
-	return hashMasterPassword(masterPassword) == hashedPassword
+	return encryption.HashMasterPassword(masterPassword) == hashedPassword
 }
