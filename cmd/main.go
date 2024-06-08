@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -14,7 +16,11 @@ import (
 )
 
 func main() {
-	masterPassword := "master-password" // change to config later
+	a := app.New()
+	a.Settings().SetTheme(theme.DefaultTheme())
+
+	window := a.NewWindow("The Vault")
+	masterPassword := getMasterPassword(window) // change to config later
 	pathToPasswordFile := "data/passwords.json"
 
 	//initialise the required files
@@ -26,11 +32,6 @@ func main() {
 		}
 		fmt.Println("Password data initialized successfully")
 	}
-
-	a := app.New()
-	a.Settings().SetTheme(theme.DefaultTheme())
-
-	window := a.NewWindow("The Vault")
 
 	passwordVaultScrollContainer := container.NewVScroll(
 		ui.NewPasswordVaultContainer(pathToPasswordFile, masterPassword, window),
@@ -72,4 +73,31 @@ func main() {
 	window.CenterOnScreen()
 
 	window.ShowAndRun()
+}
+
+func getMasterPassword(window fyne.Window) string {
+	// Check if the environment variable exists
+	masterPassword, exists := os.LookupEnv("MASTER_PASSWORD")
+	if !exists {
+		// Environment variable does not exist, prompt the user to set it using a form
+		formItems := []*widget.FormItem{
+			widget.NewFormItem("Master Password:", widget.NewPasswordEntry()),
+		}
+		newPasswordForm := dialog.NewForm("Set Master Password", "Set", "Cancel", formItems, func(b bool) {
+			if b {
+				masterPassword = formItems[0].Widget.(*widget.Entry).Text
+				// Set the environment variable
+				err := os.Setenv("MASTER_PASSWORD", masterPassword)
+				if err != nil {
+					fmt.Println("Failed to set MASTER_PASSWORD environment variable:", err)
+					os.Exit(1)
+				}
+			} else {
+				fmt.Println("Master password not set. Exiting...")
+				os.Exit(0)
+			}
+		}, window)
+		newPasswordForm.Show()
+	}
+	return masterPassword
 }

@@ -25,7 +25,7 @@ func StoreMasterPassword(masterPassword string, pathToMasterPassword string) err
 
 	err := writeMasterPassword(entry, pathToMasterPassword)
 	if err != nil {
-		return fmt.Errorf("failed to write password manager: %w", err)
+		return fmt.Errorf("failed to write password master: %w", err)
 	}
 
 	return nil
@@ -37,27 +37,27 @@ func ReadMasterPassword(pathToMasterPassword string) (MasterPassword, error) {
 		if os.IsNotExist(err) {
 			return MasterPassword{}, nil
 		}
-		return MasterPassword{}, fmt.Errorf("failed to read password manager file: %w", err)
+		return MasterPassword{}, fmt.Errorf("failed to read password master file: %w", err)
 	}
 
-	var manager MasterPassword
-	err = json.Unmarshal(file, &manager)
+	var master MasterPassword
+	err = json.Unmarshal(file, &master)
 	if err != nil {
-		return MasterPassword{}, fmt.Errorf("failed to unmarshal password manager: %w", err)
+		return MasterPassword{}, fmt.Errorf("failed to unmarshal password master: %w", err)
 	}
 
-	return manager, nil
+	return master, nil
 }
 
-func writeMasterPassword(manager MasterPassword, pathToMasterPassword string) error {
-	file, err := json.MarshalIndent(manager, "", "  ")
+func writeMasterPassword(master MasterPassword, pathToMasterPassword string) error {
+	file, err := json.MarshalIndent(master, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal password manager: %w", err)
+		return fmt.Errorf("failed to marshal password master: %w", err)
 	}
 
 	err = os.WriteFile(pathToMasterPassword, file, 0600)
 	if err != nil {
-		return fmt.Errorf("failed to write password manager file: %w", err)
+		return fmt.Errorf("failed to write password master file: %w", err)
 	}
 
 	return nil
