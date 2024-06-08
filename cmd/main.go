@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -83,46 +82,38 @@ func main() {
 }
 
 func getMasterPassword(window fyne.Window, callback func(string)) {
-	// Check if the environment variable exists
-	masterPassword, exists := os.LookupEnv("MASTER_PASSWORD")
-	if exists {
-		// Environment variable exists, use its value
+	// Check if the system environment variable exists
+	masterPassword := os.Getenv("MASTER_PASSWORD")
+	if masterPassword != "" {
+		// Environment variable exists and is not empty, use its value
 		callback(masterPassword)
-	} else {
-		// Environment variable does not exist, prompt the user to set it using a form
-		formItems := []*widget.FormItem{
-			widget.NewFormItem("Master Password:", widget.NewPasswordEntry()),
-		}
-		newPasswordForm := dialog.NewForm("Set Master Password", "Set", "Cancel", formItems, func(b bool) {
-			if b {
-				masterPassword = formItems[0].Widget.(*widget.Entry).Text
-				// Set the environment variable system-wide
-				err := setMasterPasswordEnvVar(masterPassword)
-				if err != nil {
-					fmt.Println("Failed to set MASTER_PASSWORD environment variable:", err)
-				}
-				callback(masterPassword)
-			} else {
-				fmt.Println("Master password not set. Exiting...")
-				os.Exit(0)
+		return
+	}
+
+	// Environment variable does not exist or is empty, prompt the user to set it using a form
+	formItems := []*widget.FormItem{
+		widget.NewFormItem("Master Password:", widget.NewPasswordEntry()),
+	}
+	newPasswordForm := dialog.NewForm("Set Master Password", "Set", "Cancel", formItems, func(b bool) {
+		if b {
+			masterPassword := formItems[0].Widget.(*widget.Entry).Text
+			// Set the system environment variable
+			cmd := exec.Command("setx", "MASTER_PASSWORD", masterPassword)
+			err := cmd.Run()
+			if err != nil {
+				fmt.Println("Failed to set MASTER_PASSWORD system environment variable:", err)
+				os.Exit(1)
 			}
-		}, window)
+			callback(masterPassword)
+		} else {
+			fmt.Println("Master password not set. Exiting...")
+			os.Exit(0)
+		}
+	}, window)
 
-		// Set the size and position of the dialog box
-		newPasswordForm.Resize(fyne.NewSize(400, 200))
-		window.CenterOnScreen()
-		window.Resize(fyne.NewSize(400, 200))
-
-		newPasswordForm.Show()
-	}
-}
-func setMasterPasswordEnvVar(masterPassword string) error {
-	// Set the environment variable system-wide
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("setx", "MASTER_PASSWORD", masterPassword)
-	} else {
-		cmd = exec.Command("sh", "-c", fmt.Sprintf("echo 'export MASTER_PASSWORD=%s' >> ~/.bashrc", masterPassword))
-	}
-	return cmd.Run()
+	// Set the size and position of the dialog box
+	newPasswordForm.Resize(fyne.NewSize(400, 200))
+	newPasswordForm.Show()
+	window.CenterOnScreen()
+	window.Resize(fyne.NewSize(400, 200))
 }

@@ -187,9 +187,6 @@ func createDecryptedPasswordCard(pathToPasswordFile string, masterPassword strin
 
 		passwordCardContent := container.NewBorder(nil, nil, nil, passwordButtonsContainer, passwordCard)
 		passwordCards = append(passwordCards, passwordCardContent)
-
-		passwordTitle := password.Title
-		fmt.Printf("Password for %s: %s\n", passwordTitle, retrievedPassword)
 	}
 
 	return container.New(layout.NewVBoxLayout(), passwordCards...)
