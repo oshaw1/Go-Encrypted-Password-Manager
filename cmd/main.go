@@ -92,7 +92,7 @@ func getMasterPassword(window fyne.Window, callback func(string)) {
 
 	// Environment variable does not exist or is empty, prompt the user to set it using a form
 	formItems := []*widget.FormItem{
-		widget.NewFormItem("Master Password:", widget.NewPasswordEntry()),
+		widget.NewFormItem("Set Master Password:", widget.NewPasswordEntry()),
 	}
 	newPasswordForm := dialog.NewForm("Set Master Password", "Set", "Cancel", formItems, func(b bool) {
 		if b {
