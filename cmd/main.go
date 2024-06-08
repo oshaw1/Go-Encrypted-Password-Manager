@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -20,65 +22,73 @@ func main() {
 	a.Settings().SetTheme(theme.DefaultTheme())
 
 	window := a.NewWindow("The Vault")
-	masterPassword := getMasterPassword(window) // change to config later
-	pathToPasswordFile := "data/passwords.json"
+	var masterPassword string
 
-	//initialise the required files
-	if !passwords.CheckPasswordFileExistsInDataDirectory(pathToPasswordFile) {
-		err := passwords.InitializePasswordManager(masterPassword, pathToPasswordFile)
-		if err != nil {
-			fmt.Println("Failed to initialize password data:", err)
-			return
+	getMasterPassword(window, func(password string) {
+		masterPassword = password
+
+		pathToPasswordFile := "data/passwords.json"
+
+		//initialise the required files
+		if !passwords.CheckPasswordFileExistsInDataDirectory(pathToPasswordFile) {
+			err := passwords.InitializePasswordManager(masterPassword, pathToPasswordFile)
+			if err != nil {
+				fmt.Println("Failed to initialize password data:", err)
+				return
+			}
+			fmt.Println("Password data initialized successfully")
 		}
-		fmt.Println("Password data initialized successfully")
-	}
 
-	passwordVaultScrollContainer := container.NewVScroll(
-		ui.NewPasswordVaultContainer(pathToPasswordFile, masterPassword, window),
-	)
-
-	contentContainer := container.NewStack(
-		passwordVaultScrollContainer,
-	)
-
-	vaultNavButton := widget.NewButton("The Vault", func() {
 		passwordVaultScrollContainer := container.NewVScroll(
 			ui.NewPasswordVaultContainer(pathToPasswordFile, masterPassword, window),
 		)
-		contentContainer.Objects = []fyne.CanvasObject{passwordVaultScrollContainer}
-		contentContainer.Refresh()
-	})
 
-	settingsNavButton := widget.NewButton("Settings", func() {
-		settingsScrollContainer := container.NewVScroll(
-			ui.NewSettingsContainer(window),
+		contentContainer := container.NewStack(
+			passwordVaultScrollContainer,
 		)
-		contentContainer.Objects = []fyne.CanvasObject{settingsScrollContainer}
-		contentContainer.Refresh()
+
+		vaultNavButton := widget.NewButton("The Vault", func() {
+			passwordVaultScrollContainer := container.NewVScroll(
+				ui.NewPasswordVaultContainer(pathToPasswordFile, masterPassword, window),
+			)
+			contentContainer.Objects = []fyne.CanvasObject{passwordVaultScrollContainer}
+			contentContainer.Refresh()
+		})
+
+		settingsNavButton := widget.NewButton("Settings", func() {
+			settingsScrollContainer := container.NewVScroll(
+				ui.NewSettingsContainer(window),
+			)
+			contentContainer.Objects = []fyne.CanvasObject{settingsScrollContainer}
+			contentContainer.Refresh()
+		})
+
+		navContainer := container.NewVBox(
+			vaultNavButton,
+			settingsNavButton,
+		)
+
+		splitContainer := container.NewHSplit(
+			navContainer,
+			contentContainer,
+		)
+		splitContainer.SetOffset(0.20)
+
+		window.SetContent(splitContainer)
+		window.Resize(fyne.NewSize(1000, 1000))
+		window.CenterOnScreen()
 	})
-
-	navContainer := container.NewVBox(
-		vaultNavButton,
-		settingsNavButton,
-	)
-
-	splitContainer := container.NewHSplit(
-		navContainer,
-		contentContainer,
-	)
-	splitContainer.SetOffset(0.20)
-
-	window.SetContent(splitContainer)
-	window.Resize(fyne.NewSize(1000, 1000))
-	window.CenterOnScreen()
 
 	window.ShowAndRun()
 }
 
-func getMasterPassword(window fyne.Window) string {
+func getMasterPassword(window fyne.Window, callback func(string)) {
 	// Check if the environment variable exists
 	masterPassword, exists := os.LookupEnv("MASTER_PASSWORD")
-	if !exists {
+	if exists {
+		// Environment variable exists, use its value
+		callback(masterPassword)
+	} else {
 		// Environment variable does not exist, prompt the user to set it using a form
 		formItems := []*widget.FormItem{
 			widget.NewFormItem("Master Password:", widget.NewPasswordEntry()),
@@ -86,18 +96,33 @@ func getMasterPassword(window fyne.Window) string {
 		newPasswordForm := dialog.NewForm("Set Master Password", "Set", "Cancel", formItems, func(b bool) {
 			if b {
 				masterPassword = formItems[0].Widget.(*widget.Entry).Text
-				// Set the environment variable
-				err := os.Setenv("MASTER_PASSWORD", masterPassword)
+				// Set the environment variable system-wide
+				err := setMasterPasswordEnvVar(masterPassword)
 				if err != nil {
 					fmt.Println("Failed to set MASTER_PASSWORD environment variable:", err)
-					os.Exit(1)
 				}
+				callback(masterPassword)
 			} else {
 				fmt.Println("Master password not set. Exiting...")
 				os.Exit(0)
 			}
 		}, window)
+
+		// Set the size and position of the dialog box
+		newPasswordForm.Resize(fyne.NewSize(400, 200))
+		window.CenterOnScreen()
+		window.Resize(fyne.NewSize(400, 200))
+
 		newPasswordForm.Show()
 	}
-	return masterPassword
+}
+func setMasterPasswordEnvVar(masterPassword string) error {
+	// Set the environment variable system-wide
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("setx", "MASTER_PASSWORD", masterPassword)
+	} else {
+		cmd = exec.Command("sh", "-c", fmt.Sprintf("echo 'export MASTER_PASSWORD=%s' >> ~/.bashrc", masterPassword))
+	}
+	return cmd.Run()
 }
