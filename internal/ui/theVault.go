@@ -19,13 +19,16 @@ import (
 	"github.com/oshaw1/Encrypted-Password-Manager/internal/passwords"
 )
 
+var (
+	vaultContentContainer = container.NewVBox()
+)
+
 func NewPasswordVaultContainer(pathToPasswordFile string, masterPassword string, window fyne.Window) *fyne.Container {
 	titleLabel := widget.NewLabel("Welcome To The Vault")
-	vaultContentContainer := container.NewVBox()
 	masterPasswordEntry := widget.NewPasswordEntry()
 	addPasswordButton := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
 		if masterPasswordEntry.Text == "enter master password" {
-			dialog.NewInformation("Please enter masterpassword", "Dismiss", window)
+			dialog.NewInformation("Please enter masterpassword", "Dismiss", window).Show()
 			return
 		} else {
 			formItems := []*widget.FormItem{
@@ -71,10 +74,9 @@ func NewPasswordVaultContainer(pathToPasswordFile string, masterPassword string,
 		}
 		if encryption.HashMasterPassword(masterPasswordEntry.Text) == encryption.HashMasterPassword(masterPassword) {
 			refreshPasswordCardsToDecrypedVersion(pathToPasswordFile, masterPassword, window, vaultContentContainer)
-			go func() {
-				time.Sleep(5 * time.Minute)
-				refreshPasswordCards(pathToPasswordFile, masterPassword, window, vaultContentContainer)
-			}()
+			authed = true
+			RemainingTime = 5 * time.Minute
+			AuthProgressBar.SetValue(1.0)
 		} else {
 			fmt.Print(masterPasswordEntry.Text)
 			masterPasswordEntry.SetText("Master password incorrect")
@@ -117,7 +119,7 @@ func createPasswordCard(pathToPasswordFile string, masterPassword string, window
 	}
 
 	var passwordCards []fyne.CanvasObject
-	for _, password := range passwordData.Passwords {
+	for index, password := range passwordData.Passwords {
 		hyperLinkLabel := widget.NewLabel("Link:  " + randomStars())
 		usernameLabel := widget.NewLabel("Username / Account:  " + randomStars())
 		passwordLabel := widget.NewLabel("Password:  " + randomStars())
@@ -125,7 +127,7 @@ func createPasswordCard(pathToPasswordFile string, masterPassword string, window
 		passwordCard := widget.NewCard(password.Title, "", labelContainer)
 
 		passwordButtonsContainer := container.NewVBox(
-			widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), func() {}),
+			createEditButton(pathToPasswordFile, masterPassword, index, window, vaultContentContainer),
 			createDeleteButton(pathToPasswordFile, masterPassword, password.ID, window, vaultContentContainer),
 		)
 
@@ -167,7 +169,7 @@ func createDecryptedPasswordCard(pathToPasswordFile string, masterPassword strin
 
 	var passwordCards []fyne.CanvasObject
 
-	for _, password := range passwordData.Passwords {
+	for index, password := range passwordData.Passwords {
 		passwordID := password.ID
 		retrievedLink, retrievedUsername, retrievedPassword, err := passwords.RetrievePassword(passwordID, masterPassword, pathToPasswordFile)
 		if err != nil {
@@ -181,7 +183,7 @@ func createDecryptedPasswordCard(pathToPasswordFile string, masterPassword strin
 		passwordCard := widget.NewCard(password.Title, "", labelContainer)
 
 		passwordButtonsContainer := container.NewVBox(
-			widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), func() {}),
+			createEditButton(pathToPasswordFile, masterPassword, index, window, vaultContentContainer),
 			createDeleteButton(pathToPasswordFile, masterPassword, password.ID, window, vaultContentContainer),
 		)
 
@@ -190,6 +192,77 @@ func createDecryptedPasswordCard(pathToPasswordFile string, masterPassword strin
 	}
 
 	return container.New(layout.NewVBoxLayout(), passwordCards...)
+}
+
+func createEditButton(pathToPasswordFile string, masterPassword string, passwordIndex int, window fyne.Window, vaultContentContainer *fyne.Container) fyne.Widget {
+	editButton := widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), func() {
+		if !authed {
+			dialog.NewInformation("Please Unlock the Vault", "Please unlock the vault before editing passwords...", window).Show()
+			return
+		}
+		data, err := os.ReadFile(pathToPasswordFile)
+		if err != nil {
+			fmt.Printf("Failed to read password file: %v\n", err)
+			dialog.NewError(err, window)
+			return
+		}
+
+		var passwordData model.PasswordData
+		err = json.Unmarshal(data, &passwordData)
+		if err != nil {
+			fmt.Printf("Failed to parse JSON data: %v\n", err)
+			dialog.NewError(err, window)
+			return
+		}
+
+		password := passwordData.Passwords[passwordIndex]
+
+		formItems := []*widget.FormItem{
+			widget.NewFormItem("Title", widget.NewEntry()),
+			widget.NewFormItem("Link", widget.NewEntry()),
+			widget.NewFormItem("Username", widget.NewEntry()),
+			widget.NewFormItem("Password", widget.NewPasswordEntry()),
+		}
+
+		editPasswordForm := dialog.NewForm("Edit Password", "Save", "Cancel", formItems, func(ok bool) {
+			if ok {
+				newTitle := formItems[0].Widget.(*widget.Entry).Text
+				newLink := formItems[1].Widget.(*widget.Entry).Text
+				newUsername := formItems[2].Widget.(*widget.Entry).Text
+				newPassword := formItems[3].Widget.(*widget.Entry).Text
+
+				err := passwords.EditPassword(password.ID, newTitle, newLink, newUsername, newPassword, masterPassword, pathToPasswordFile)
+				if err != nil {
+					dialog.NewError(err, window)
+					fmt.Println("Error editing password:", err)
+				} else {
+					if !authed {
+						refreshPasswordCards(pathToPasswordFile, masterPassword, window, vaultContentContainer)
+					} else {
+						refreshPasswordCardsToDecrypedVersion(pathToPasswordFile, masterPassword, window, vaultContentContainer)
+					}
+				}
+			}
+		}, window)
+
+		editPasswordForm.Resize(fyne.NewSize(600, 200))
+
+		passwordID := password.ID
+		retrievedLink, retrievedUsername, retrievedPassword, err := passwords.RetrievePassword(passwordID, masterPassword, pathToPasswordFile)
+		if err != nil {
+			dialog.NewError(err, window)
+			fmt.Println("Error retrieving password:", err)
+		}
+
+		// Set the initial values of the form fields
+		formItems[0].Widget.(*widget.Entry).SetText(password.Title)
+		formItems[1].Widget.(*widget.Entry).SetText(retrievedLink)
+		formItems[2].Widget.(*widget.Entry).SetText(retrievedUsername)
+		formItems[3].Widget.(*widget.Entry).SetText(retrievedPassword)
+
+		editPasswordForm.Show()
+	})
+	return editButton
 }
 
 func createDeleteButton(pathToPasswordFile string, masterPassword string, passwordID string, window fyne.Window, vaultContentContainer *fyne.Container) fyne.Widget {

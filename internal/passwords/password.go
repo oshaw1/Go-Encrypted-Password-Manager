@@ -134,6 +134,60 @@ func DeletePasswordByID(id, masterPassword string, pathToPasswordFile string) er
 	return nil
 }
 
+func EditPassword(id, newTitle, newLink, newUsername, newPassword, masterPassword string, pathToPasswordFile string) error {
+	manager, err := ReadPasswordManager(pathToPasswordFile)
+	if err != nil {
+		return fmt.Errorf("failed to read password manager: %w", err)
+	}
+
+	if !VerifyMasterPasswordIsHashedPassword(masterPassword, manager.MasterPasswordHash) {
+		return fmt.Errorf("invalid master password")
+	}
+
+	encryptionKey := encryption.DeriveEncryptionKeyFromMasterPassword(masterPassword, manager.Salt)
+
+	for i, password := range manager.Passwords {
+		if password.ID == id {
+			if newPassword != "" {
+				encryptedPassword, err := encryption.EncryptWithAES(newPassword, encryptionKey)
+				if err != nil {
+					return fmt.Errorf("failed to encrypt new password: %w", err)
+				}
+				manager.Passwords[i].EncryptedPassword = encryptedPassword
+			}
+
+			if newLink != "" {
+				encryptedLink, err := encryption.EncryptWithAES(newLink, encryptionKey)
+				if err != nil {
+					return fmt.Errorf("failed to encrypt new link: %w", err)
+				}
+				manager.Passwords[i].Link = encryptedLink
+			}
+
+			if newUsername != "" {
+				encryptedUsername, err := encryption.EncryptWithAES(newUsername, encryptionKey)
+				if err != nil {
+					return fmt.Errorf("failed to encrypt new username: %w", err)
+				}
+				manager.Passwords[i].Username = encryptedUsername
+			}
+
+			if newTitle != "" {
+				manager.Passwords[i].Title = newTitle
+			}
+
+			err = writePasswordManager(manager, pathToPasswordFile)
+			if err != nil {
+				return fmt.Errorf("failed to write password manager: %w", err)
+			}
+
+			return nil
+		}
+	}
+
+	return fmt.Errorf("password not found")
+}
+
 func CheckPasswordFileExistsInDataDirectory(dataDir string) bool {
 	_, err := os.Stat(dataDir)
 	return !os.IsNotExist(err)
