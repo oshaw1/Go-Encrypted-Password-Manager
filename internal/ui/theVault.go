@@ -86,7 +86,12 @@ func NewPasswordVaultContainer(pathToPasswordFile string, masterPassword string,
 	masterPasswordContainer := container.NewBorder(nil, nil, nil, unlockButton, masterPasswordEntry)
 
 	vaultContentContainer = container.NewVBox(masterPasswordContainer)
-	passwordCards := createPasswordCard(pathToPasswordFile, masterPassword, window, vaultContentContainer)
+	var passwordCards fyne.CanvasObject
+	if !authed {
+		passwordCards = createPasswordCard(pathToPasswordFile, masterPassword, window, vaultContentContainer)
+	} else {
+		passwordCards = createDecryptedPasswordCard(pathToPasswordFile, masterPassword, window, vaultContentContainer)
+	}
 	vaultContentContainer.Add(passwordCards)
 
 	theVault := container.NewVBox(
@@ -176,9 +181,25 @@ func createDecryptedPasswordCard(pathToPasswordFile string, masterPassword strin
 			fmt.Printf("Failed to retrieve password for ID %s: %v\n", passwordID, err)
 			dialog.NewError(err, window)
 		}
-		hyperLinkLabel := widget.NewLabel("Link:  " + retrievedLink)
-		usernameLabel := widget.NewLabel("Username / Account:  " + retrievedUsername)
-		passwordLabel := widget.NewLabel("Password:  " + retrievedPassword)
+
+		hyperLinkLabel := widget.NewHyperlink("Link:  "+retrievedLink, nil)
+		hyperLinkLabel.OnTapped = func() {
+			window.Clipboard().SetContent(retrievedLink)
+			showPopupBelow(hyperLinkLabel, "Link copied to clipboard", window)
+		}
+
+		usernameLabel := widget.NewHyperlink("Username / Account:  "+retrievedUsername, nil)
+		usernameLabel.OnTapped = func() {
+			window.Clipboard().SetContent(retrievedUsername)
+			showPopupBelow(usernameLabel, "Username copied to clipboard", window)
+		}
+
+		passwordLabel := widget.NewHyperlink("Password:  "+retrievedPassword, nil)
+		passwordLabel.OnTapped = func() {
+			window.Clipboard().SetContent(retrievedPassword)
+			showPopupBelow(usernameLabel, "Password copied to clipboard", window)
+		}
+
 		labelContainer := container.NewVBox(hyperLinkLabel, usernameLabel, passwordLabel)
 		passwordCard := widget.NewCard(password.Title, "", labelContainer)
 
@@ -192,6 +213,23 @@ func createDecryptedPasswordCard(pathToPasswordFile string, masterPassword strin
 	}
 
 	return container.New(layout.NewVBoxLayout(), passwordCards...)
+}
+
+func showPopupBelow(hyperlink fyne.Widget, message string, window fyne.Window) {
+	popupLabel := widget.NewLabel(message)
+	popupLabel.Alignment = fyne.TextAlignCenter
+	popup := widget.NewPopUp(popupLabel, window.Canvas())
+
+	widgetPos := fyne.CurrentApp().Driver().AbsolutePositionForObject(hyperlink)
+	widgetSize := hyperlink.Size()
+
+	popupPos := fyne.NewPos(widgetPos.X, widgetPos.Y+widgetSize.Height)
+	popup.ShowAtPosition(popupPos)
+
+	go func() {
+		time.Sleep(1 * time.Second)
+		popup.Hide()
+	}()
 }
 
 func createEditButton(pathToPasswordFile string, masterPassword string, passwordIndex int, window fyne.Window, vaultContentContainer *fyne.Container) fyne.Widget {
