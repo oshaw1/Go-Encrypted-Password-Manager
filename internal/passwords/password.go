@@ -71,10 +71,6 @@ func RetrievePassword(id, masterPassword string, pathToPasswordFile string) (dec
 		return "", "", "", fmt.Errorf("failed to read password manager: %w", err)
 	}
 
-	if !VerifyMasterPasswordIsHashedPassword(masterPassword, manager.MasterPasswordHash) {
-		return "", "", "", fmt.Errorf("invalid master password")
-	}
-
 	encryptionKey := encryption.DeriveEncryptionKeyFromMasterPassword(masterPassword, manager.Salt)
 
 	for _, password := range manager.Passwords {

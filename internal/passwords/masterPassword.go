@@ -1,4 +1,4 @@
-package config
+package passwords
 
 import (
 	"encoding/json"

@@ -72,7 +72,7 @@ func NewPasswordVaultContainer(pathToPasswordFile string, masterPassword string,
 		if err != nil {
 			fmt.Printf("Failed to parse JSON data: %v\n", err)
 		}
-		if encryption.HashMasterPassword(masterPasswordEntry.Text) == encryption.HashMasterPassword(masterPassword) {
+		if encryption.HashMasterPassword(masterPasswordEntry.Text) == passwordData.MasterPasswordHash {
 			refreshPasswordCardsToDecrypedVersion(pathToPasswordFile, masterPassword, window, vaultContentContainer)
 			authed = true
 			RemainingTime = 5 * time.Minute
