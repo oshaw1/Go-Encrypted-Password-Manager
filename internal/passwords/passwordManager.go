@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/oshaw1/Encrypted-Password-Manager/internal/encryption"
 )
@@ -52,6 +53,11 @@ func writePasswordManager(manager PasswordManager, pathToPasswordFile string) er
 	file, err := json.MarshalIndent(manager, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal password manager: %w", err)
+	}
+
+	dir := filepath.Dir(pathToPasswordFile)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("failed to create directories: %w", err)
 	}
 
 	err = os.WriteFile(pathToPasswordFile, file, 0600)
