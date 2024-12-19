@@ -1,6 +1,6 @@
 # Go-Encrypted-Password-Manager
 
-this is a full stack encrypted password manager written entirely in Golang.
+Password manager written entrirely in Go leveraging fyne-io on the frontend.
 
 Fyne-io for the frontend
 
